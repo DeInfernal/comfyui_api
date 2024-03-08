@@ -1,6 +1,18 @@
 # ComfyUI API
 This API was made for comfortable usage of ComfyUI tool through automated scripts like XY plot.
 
+# Installation
+```bash
+pip install git+https://github.com/DeInfernal/comfyui_api.git@v1.0.0
+```
+
+or
+
+requirements.txt
+```
+-e git://github.com/DeInfernal/comfyui_api.git@v1.0.0
+```
+
 # Usage/Example
 ```python
 import json
