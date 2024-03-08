@@ -12,12 +12,12 @@ def read(fname):
 
 
 setuptools.setup(
-    name = "comfyui_api",
+    name = "comfyui-api",
     version = "1.0.0",
     description = "API for ComfyUI",
     long_description = read('README.md'),
     url = "https://github.com/DeInfernal/comfyui_api.git",
-    packages = setuptools.find_packages('src'),
+    packages = setuptools.find_packages(),
     author = "'6'",
     license = "Free",
     keywords = "API ComfyUI"
