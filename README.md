@@ -3,14 +3,14 @@ This API was made for comfortable usage of ComfyUI tool through automated script
 
 # Installation
 ```bash
-pip install git+https://github.com/DeInfernal/comfyui_api.git@v1.0.0
+pip install git+https://github.com/DeInfernal/comfyui_api.git@v1.0.1
 ```
 
 or
 
 requirements.txt
 ```
--e git://github.com/DeInfernal/comfyui_api.git@v1.0.0
+comfyui_api @ git+https://github.com/DeInfernal/comfyui_api.git@v1.0.1
 ```
 
 # Usage/Example
@@ -20,7 +20,8 @@ from comfyui_api import ComfyUIAPI
 
 comfyapi = ComfyUIAPI('ip-address', 'port')
 
-apiworkflow = json.load(open('comfyui-workflow-api.json', 'r', encoding='utf-8'))
+with open("workflow.json", "r", encoding="utf-8") as fstream:
+    apiworkflow = json.load(fstream)
 
 comfyapi.generate_image(apiworkflow, 'image.png')
 ```

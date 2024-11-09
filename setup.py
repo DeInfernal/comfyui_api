@@ -13,7 +13,7 @@ def read(fname):
 
 setuptools.setup(
     name = "comfyui-api",
-    version = "1.0.0",
+    version = "1.0.1",
     description = "API for ComfyUI",
     long_description = read('README.md'),
     url = "https://github.com/DeInfernal/comfyui_api.git",
