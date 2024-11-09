@@ -22,7 +22,7 @@ class ComfyUIAPI:
         comfyui_port : str
             Port of ComfyUI web server.
         """
-        self._base_url = f"http://{comfyui_ip}:{comfyui_port}"
+        self._base_url = "http://{}:{}".format(comfyui_ip, comfyui_port)
 
     #  -------------------------------------------------------------------------
     #  ____            _         __                  _   _                   _
@@ -47,10 +47,10 @@ class ComfyUIAPI:
         post_data : str, optional
             Data to send though, by default None. If data was sent, don't forget to change method to POST.
         """
-        request = urllib.request.Request(f'{self._base_url}/{path}')
+        request = urllib.request.Request("{}/{}".format(self._base_url, path))
         request.method = method
         if post_data:
-            request.data = bytes(post_data, 'utf-8')  # noqa: WPS124
+            request.data = bytes(post_data, "utf-8")  # noqa: WPS124
         return urllib.request.urlopen(request).read()
 
     def _call_api(self, path: str, method: str = "GET", post_data: str = None):
@@ -80,7 +80,7 @@ class ComfyUIAPI:
             Path to save to (locally)
         """
         downloaded_file = self._request(path)
-        with open(save_to, 'wb') as file:
+        with open(save_to, "wb") as file:
             file.write(downloaded_file)
 
     # -----------------------------------------------------------------
@@ -107,7 +107,8 @@ class ComfyUIAPI:
         dict
             JSON-answer from the server, containing things like Prompt ID.
         """
-        return self._call_api('prompt', 'POST', json.dumps(workflow))
+        wrapped_workflow = {"prompt": workflow}
+        return self._call_api("prompt", "POST", json.dumps(wrapped_workflow))
 
     def get_generation_status(self, prompt_id: str) -> dict:
         """
@@ -127,9 +128,9 @@ class ComfyUIAPI:
         dict
             JSON answer from a server
         """
-        return self._call_api(f'history/{prompt_id}')
+        return self._call_api("history/{}".format(prompt_id))
 
-    def download_image(self, path_to_save_file: str, comfy_filename: str, comfy_subfolder: str = '', comfy_type: str = 'output') -> None:
+    def download_image(self, path_to_save_file: str, comfy_filename: str, comfy_subfolder: str = "", comfy_type: str = "output") -> None:
         """
         Method that allows to download a single image file from ComfyUI server.
         Should be used in conjunction with get_generation_status to ensure that image exists already.
@@ -145,7 +146,7 @@ class ComfyUIAPI:
         comfy_type : str, optional
             Output type inside ComfyUI output folder. Returns in get_generation_status. By default 'output'
         """
-        self._download(f'view?filename={comfy_filename}&subfolder={comfy_subfolder}&type={comfy_type}', path_to_save_file)
+        self._download("view?filename={}&subfolder={}&type={}".format(comfy_filename, comfy_subfolder, comfy_type), path_to_save_file)
 
     # -----------------------------------------------------------------------------------------------------------------------------------------
     #   _____                      _                                  _       _                                      _   _               _
@@ -170,7 +171,7 @@ class ComfyUIAPI:
             Path where image generated from workflow should be saved. Must be ending with '.png'
         """
         # Step 1: Send generation request and record it's ID
-        prompt_id = self.send_generation_request(workflow)['prompt_id']
+        prompt_id = self.send_generation_request(workflow)["prompt_id"]
 
         # Step 2: Wait till history returns something (meaning, generation is finished)
         history = {}
@@ -179,8 +180,18 @@ class ComfyUIAPI:
             history = self.get_generation_status(prompt_id)
 
         # Step 3: Save image somewhere
-        for output in history[prompt_id]['outputs']:
-            self.download_image(save_path,
-                                history[prompt_id]['outputs'][output]['images'][0]['filename'],
-                                history[prompt_id]['outputs'][output]['images'][0]['subfolder'],
-                                history[prompt_id]['outputs'][output]['images'][0]['type'])
+        if len(history[prompt_id]["outputs"]) == 1:
+            for output in history[prompt_id]["outputs"]:
+                self.download_image(save_path,
+                                    history[prompt_id]["outputs"][output]["images"][0]["filename"],
+                                    history[prompt_id]["outputs"][output]["images"][0]["subfolder"],
+                                    history[prompt_id]["outputs"][output]["images"][0]["type"])
+        elif len(history[prompt_id]["outputs"]) > 1:
+            for output in history[prompt_id]["outputs"]:
+                exploded_save_path = save_path.split(".")
+                exploded_save_path[-2] = exploded_save_path[-2] + str(output)
+                mended_save_path = ".".join(exploded_save_path)
+                self.download_image(mended_save_path,
+                                    history[prompt_id]["outputs"][output]["images"][0]["filename"],
+                                    history[prompt_id]["outputs"][output]["images"][0]["subfolder"],
+                                    history[prompt_id]["outputs"][output]["images"][0]["type"])
