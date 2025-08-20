@@ -1,25 +1,29 @@
 import json
-import time
-import urllib.request
+import aiohttp
+import asyncio
 
 
-class ComfyUIAPI:
+class ComfyUIAsyncAPI:
     """
     This class makes connections between software and ComfyUI
     Allowing you to generate images remotely
     """
 
+    _session = None
     _base_url = ""
 
-    def __init__(self, comfyui_base_url: str) -> None:
+    def __init__(self, session: aiohttp.ClientSession, comfyui_base_url: str) -> None:
         """
         Initalization of ComfyUI.
 
         Parameters
         ----------
+        session : aiohttp.ClientSession
+            A session object of AIOHTTP
         comfyui_base_url : str
             Scheme, IP/Port of ComfyUI web server. (Example: http://127.0.0.1:8188)
         """
+        self._session = session
         self._base_url = comfyui_base_url
 
     #  -------------------------------------------------------------------------
@@ -32,26 +36,35 @@ class ComfyUIAPI:
     #
     # -------------------------------------------------------------------------
 
-    def _request(self, path: str, method: str = "GET", post_data: str = None):
+    async def _request_get(self, path: str):
         """
-        Base method for all requests to ComfyUI API.
+        Base method for all GET requests to ComfyUI API.
 
         Parameters
         ----------
         path : str
             API path to access (example: 'prompt' or 'history/22')
-        method : str, optional
-            Method, by default "GET"
-        post_data : str, optional
-            Data to send though, by default None. If data was sent, don't forget to change method to POST.
         """
-        request = urllib.request.Request("{}/{}".format(self._base_url, path))
-        request.method = method
-        if post_data:
-            request.data = bytes(post_data, "utf-8")  # noqa: WPS124
-        return urllib.request.urlopen(request).read()
+        request_uri = "{}/{}".format(self._base_url, path)
+        response = await self._session.get(request_uri)
+        return response.content
 
-    def _call_api(self, path: str, method: str = "GET", post_data: str = None):
+    async def _request_post(self, path: str, post_data: str = None):
+        """
+        Base method for all POST requests to ComfyUI API.
+
+        Parameters
+        ----------
+        path : str
+            API path to access (example: 'prompt' or 'history/22')
+        post_data : str, optional
+            Data to send though, by default None.
+        """
+        request_uri = "{}/{}".format(self._base_url, path)
+        response = await self._session.post(request_uri, data=bytes(post_data, "utf-8"))
+        return response.content
+
+    async def _call_api(self, path: str, method: str = "GET", post_data: str = None):
         """
         Base method for calling API. API calls ALWAYS return JSON object.
 
@@ -64,9 +77,13 @@ class ComfyUIAPI:
         post_data : str, optional
             Data to send though, by default None. If data was sent, don't forget to change method to POST.
         """
-        return json.loads(self._request(path, method, post_data))
+        if method == "GET":
+            response = await self._request_get(path)
+        elif method == "POST":
+            response = await self._request_post(path, post_data)
+        return json.loads(response)
 
-    def _download(self, path: str, save_to: str):
+    async def _download(self, path: str, save_to: str):
         """
         Base method for downloading byte-like objects. Used for getting pictures downloaded.
 
@@ -77,7 +94,7 @@ class ComfyUIAPI:
         save_to : str
             Path to save to (locally)
         """
-        downloaded_file = self._request(path)
+        downloaded_file = await self._request_get(path)
         with open(save_to, "wb") as file:
             file.write(downloaded_file)
 
@@ -91,7 +108,7 @@ class ComfyUIAPI:
     #
     # -----------------------------------------------------------------
 
-    def send_generation_request(self, workflow: dict) -> dict:
+    async def send_generation_request(self, workflow: dict) -> dict:
         """
         Method that puts a single Workflow into queue of ComfyUI server.
 
@@ -106,9 +123,10 @@ class ComfyUIAPI:
             JSON-answer from the server, containing things like Prompt ID.
         """
         wrapped_workflow = {"prompt": workflow}
-        return self._call_api("prompt", "POST", json.dumps(wrapped_workflow))
+        response = await self._call_api("prompt", "POST", json.dumps(wrapped_workflow))
+        return response
 
-    def get_generation_status(self, prompt_id: str) -> dict:
+    async def get_generation_status(self, prompt_id: str) -> dict:
         """
         Method that asks server about status of specific queued image ID.
         Can return either empty dictionary if there is no such item in history
@@ -126,9 +144,10 @@ class ComfyUIAPI:
         dict
             JSON answer from a server
         """
-        return self._call_api("history/{}".format(prompt_id))
+        response = await self._call_api("history/{}".format(prompt_id))
+        return response
 
-    def download_image(self, path_to_save_file: str, comfy_filename: str, comfy_subfolder: str = "", comfy_type: str = "output") -> None:
+    async def download_image(self, path_to_save_file: str, comfy_filename: str, comfy_subfolder: str = "", comfy_type: str = "output") -> None:
         """
         Method that allows to download a single image file from ComfyUI server.
         Should be used in conjunction with get_generation_status to ensure that image exists already.
@@ -144,7 +163,7 @@ class ComfyUIAPI:
         comfy_type : str, optional
             Output type inside ComfyUI output folder. Returns in get_generation_status. By default 'output'
         """
-        self._download("view?filename={}&subfolder={}&type={}".format(comfy_filename, comfy_subfolder, comfy_type), path_to_save_file)
+        await self._download("view?filename={}&subfolder={}&type={}".format(comfy_filename, comfy_subfolder, comfy_type), path_to_save_file)
 
     # -----------------------------------------------------------------------------------------------------------------------------------------
     #   _____                      _                                  _       _                                      _   _               _
@@ -157,7 +176,7 @@ class ComfyUIAPI:
     #                       |_|
     # -----------------------------------------------------------------------------------------------------------------------------------------
 
-    def generate_image(self, workflow: dict, save_path: str) -> None:
+    async def generate_image(self, workflow: dict, save_path: str) -> None:
         """
         A convinient complex method that allows you to generate image and download in the same command.
 
@@ -169,27 +188,27 @@ class ComfyUIAPI:
             Path where image generated from workflow should be saved. Must be ending with '.png'
         """
         # Step 1: Send generation request and record it's ID
-        prompt_id = self.send_generation_request(workflow)["prompt_id"]
+        prompt_id = await self.send_generation_request(workflow)["prompt_id"]
 
         # Step 2: Wait till history returns something (meaning, generation is finished)
         history = {}
         while len(history) == 0:
-            time.sleep(1)
-            history = self.get_generation_status(prompt_id)
+            await asyncio.sleep(3)
+            history = await self.get_generation_status(prompt_id)
 
         # Step 3: Save image somewhere
         if len(history[prompt_id]["outputs"]) == 1:
             for output in history[prompt_id]["outputs"]:
-                self.download_image(save_path,
-                                    history[prompt_id]["outputs"][output]["images"][0]["filename"],
-                                    history[prompt_id]["outputs"][output]["images"][0]["subfolder"],
-                                    history[prompt_id]["outputs"][output]["images"][0]["type"])
+                await self.download_image(save_path,
+                                          history[prompt_id]["outputs"][output]["images"][0]["filename"],
+                                          history[prompt_id]["outputs"][output]["images"][0]["subfolder"],
+                                          history[prompt_id]["outputs"][output]["images"][0]["type"])
         elif len(history[prompt_id]["outputs"]) > 1:
             for output in history[prompt_id]["outputs"]:
                 exploded_save_path = save_path.split(".")
                 exploded_save_path[-2] = exploded_save_path[-2] + str(output)
                 mended_save_path = ".".join(exploded_save_path)
-                self.download_image(mended_save_path,
-                                    history[prompt_id]["outputs"][output]["images"][0]["filename"],
-                                    history[prompt_id]["outputs"][output]["images"][0]["subfolder"],
-                                    history[prompt_id]["outputs"][output]["images"][0]["type"])
+                await self.download_image(mended_save_path,
+                                          history[prompt_id]["outputs"][output]["images"][0]["filename"],
+                                          history[prompt_id]["outputs"][output]["images"][0]["subfolder"],
+                                          history[prompt_id]["outputs"][output]["images"][0]["type"])
