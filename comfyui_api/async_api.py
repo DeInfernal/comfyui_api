@@ -1,6 +1,7 @@
 import json
-import aiohttp
 import asyncio
+import aiohttp
+import aiofiles
 
 
 class ComfyUIAsyncAPI:
@@ -47,7 +48,7 @@ class ComfyUIAsyncAPI:
         """
         request_uri = "{}/{}".format(self._base_url, path)
         response = await self._session.get(request_uri)
-        return response.content
+        return await response.text()
 
     async def _request_post(self, path: str, post_data: str = None):
         """
@@ -62,7 +63,7 @@ class ComfyUIAsyncAPI:
         """
         request_uri = "{}/{}".format(self._base_url, path)
         response = await self._session.post(request_uri, data=bytes(post_data, "utf-8"))
-        return response.content
+        return await response.text()
 
     async def _call_api(self, path: str, method: str = "GET", post_data: str = None):
         """
@@ -81,6 +82,7 @@ class ComfyUIAsyncAPI:
             response = await self._request_get(path)
         elif method == "POST":
             response = await self._request_post(path, post_data)
+
         return json.loads(response)
 
     async def _download(self, path: str, save_to: str):
@@ -94,9 +96,14 @@ class ComfyUIAsyncAPI:
         save_to : str
             Path to save to (locally)
         """
-        downloaded_file = await self._request_get(path)
-        with open(save_to, "wb") as file:
-            file.write(downloaded_file)
+        request_uri = "{}/{}".format(self._base_url, path)
+
+        response = await self._session.get(request_uri)
+
+        downloaded_file = await response.read()
+
+        async with aiofiles.open(save_to, "wb") as file:
+            await file.write(downloaded_file)
 
     # -----------------------------------------------------------------
     #           _____ _____                  _   _               _
@@ -188,7 +195,8 @@ class ComfyUIAsyncAPI:
             Path where image generated from workflow should be saved. Must be ending with '.png'
         """
         # Step 1: Send generation request and record it's ID
-        prompt_id = await self.send_generation_request(workflow)["prompt_id"]
+        prompt_id_future = await self.send_generation_request(workflow)
+        prompt_id = prompt_id_future["prompt_id"]
 
         # Step 2: Wait till history returns something (meaning, generation is finished)
         history = {}
