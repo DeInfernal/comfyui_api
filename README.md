@@ -5,14 +5,14 @@ This API was made for comfortable usage of ComfyUI tool through automated script
 ## Installation
 
 ```bash
-pip install git+https://github.com/DeInfernal/comfyui_api.git@v2.0.0
+pip install git+https://github.com/DeInfernal/comfyui_api.git@v2.0.2
 ```
 
 or
 
 requirements.txt
 ```
-comfyui_api @ git+https://github.com/DeInfernal/comfyui_api.git@v2.0.0
+comfyui_api @ git+https://github.com/DeInfernal/comfyui_api.git@v2.0.2
 ```
 
 ## Usage/Example
